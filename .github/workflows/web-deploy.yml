@@ -27,7 +27,10 @@ jobs:
 
       - name: Install and Build
         env:
-          VITE_MS_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          # Dedicated Entra SPA app for web sign-in (NOT the deploy service
+          # principal). Public client, no secret. Add MAIL_MS_CLIENT_ID as a
+          # repo/org secret with the new app registration's Application ID.
+          VITE_MS_CLIENT_ID: ${{ secrets.MAIL_MS_CLIENT_ID }}
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
         run: |
           cd web

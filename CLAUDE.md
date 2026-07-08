@@ -27,18 +27,36 @@ Everything runs through Actions using the org `AZURE_*` secrets. Default branch:
 
 ## Required GitHub Secrets
 
-All reused from existing org secrets — nothing new to add:
-- `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`
+Reused from existing org secrets:
+- `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` — deploy service principal (`enterpriseds-github-actions`), used only for Azure deployment
 - `AZURE_STORAGE_CONNECTION_STRING`
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — Google OAuth client (API runtime + web build)
 
+App-specific secret to add:
+- `MAIL_MS_CLIENT_ID` — Application (client) ID of the **dedicated Entra SPA app** for the Microsoft web sign-in (see below). Public client, **no secret**.
+
 Secret → setting mapping:
-- Web build: `VITE_MS_CLIENT_ID` ← `AZURE_CLIENT_ID`, `VITE_GOOGLE_CLIENT_ID` ← `GOOGLE_CLIENT_ID`
+- Web build: `VITE_MS_CLIENT_ID` ← `MAIL_MS_CLIENT_ID`, `VITE_GOOGLE_CLIENT_ID` ← `GOOGLE_CLIENT_ID`
 - API runtime: `AZURE_STORAGE_CONNECTION_STRING`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
 
-The Microsoft web sign-in reuses the Entra app behind `AZURE_CLIENT_ID`; that app
-registration needs the Static Web App URL added as a redirect URI and delegated
-Mail/Calendar scopes for the Connect flow to complete.
+### Microsoft web sign-in — dedicated Entra app
+
+The Connect (Microsoft) flow is **client-side only** (MSAL browser + PKCE); the API
+never performs a server-side Microsoft token exchange, so the app needs **no client
+secret**. It uses its own app registration, kept separate from the deploy service
+principal. One-time portal setup:
+
+1. Entra ID → App registrations → **New registration**. Name e.g. `enterpriseds-mail-web`.
+   Supported account types: **single tenant** (this org only).
+2. **Authentication** → Add a platform → **Single-page application** → redirect URI:
+   `https://<static-web-app-host>` (currently `https://victorious-field-096ac470f.7.azurestaticapps.net`).
+3. Copy the **Application (client) ID** → set it as the `MAIL_MS_CLIENT_ID` secret.
+4. Graph delegated scopes (`User.Read`, `Mail.Read`, `Calendars.Read`) are consented
+   at first sign-in; optionally pre-add them under **API permissions**.
+
+`msalConfig.ts` pins the authority to the EnterpriseDS tenant (single-tenant). To allow
+external/personal accounts, flip the app to multi-tenant and set `VITE_MS_AUTHORITY`
+(e.g. `https://login.microsoftonline.com/organizations`) in `web-deploy.yml`.
 
 ## Local Dev
 

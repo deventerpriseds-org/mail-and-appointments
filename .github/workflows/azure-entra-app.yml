@@ -60,5 +60,5 @@ jobs:
             echo "- **Client ID:** \`$APP_ID\`"
             echo "- **SPA redirect URI:** $REDIRECT"
             echo ""
-            echo "Next: set the \`MAIL_MS_CLIENT_ID\` secret to the Client ID above, then re-run **Deploy Web to Azure Static Web Apps**."
+            echo "Next: re-run **Deploy Web to Azure Static Web Apps** — it resolves this Client ID automatically by app name. Setting \`MAIL_MS_CLIENT_ID\` is optional (fallback only)."
           } >> "$GITHUB_STEP_SUMMARY"

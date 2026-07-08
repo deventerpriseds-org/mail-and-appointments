@@ -1,0 +1,64 @@
+name: Provision Entra App (web sign-in)
+# Creates/updates the dedicated single-tenant Entra app registration used by the
+# web Microsoft sign-in, and points its SPA redirect URI at the Static Web App.
+#
+# Prerequisite (one-time, admin): the deploy service principal (AZURE_CLIENT_ID)
+# must hold Microsoft Graph **Application.ReadWrite.OwnedBy** with admin consent.
+# Without it, the az ad steps fail with "Insufficient privileges".
+#
+# Idempotent. After it runs, copy the printed Client ID into the MAIL_MS_CLIENT_ID
+# secret and re-run "Deploy Web".
+
+on:
+  workflow_dispatch:
+
+env:
+  RESOURCE_GROUP: EnterpriseDS_ResourceGRP
+  STATIC_WEB_APP: enterpriseds-mail-web
+  APP_NAME: enterpriseds-mail-web
+
+jobs:
+  entra:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+
+      - name: Create/update Entra app + SPA redirect URI
+        run: |
+          set -euo pipefail
+
+          HOST=$(az staticwebapp show --name "$STATIC_WEB_APP" --resource-group "$RESOURCE_GROUP" --query "defaultHostname" -o tsv)
+          REDIRECT="https://$HOST"
+          echo "Static Web App redirect URI: $REDIRECT"
+
+          APP_ID=$(az ad app list --display-name "$APP_NAME" --query "[0].appId" -o tsv 2>/dev/null || true)
+          if [ -z "${APP_ID:-}" ] || [ "$APP_ID" = "null" ]; then
+            echo "Creating app registration $APP_NAME ..."
+            APP_ID=$(az ad app create \
+              --display-name "$APP_NAME" \
+              --sign-in-audience AzureADMyOrg \
+              --query appId -o tsv)
+          else
+            echo "App registration already exists: $APP_ID"
+          fi
+
+          OBJ_ID=$(az ad app show --id "$APP_ID" --query id -o tsv)
+
+          echo "Setting SPA redirect URI (Graph PATCH; az has no SPA flag) ..."
+          az rest --method PATCH \
+            --uri "https://graph.microsoft.com/v1.0/applications/$OBJ_ID" \
+            --headers 'Content-Type=application/json' \
+            --body "{\"spa\":{\"redirectUris\":[\"$REDIRECT\"]}}"
+
+          {
+            echo "### Entra app ready"
+            echo ""
+            echo "- **App name:** $APP_NAME (single tenant)"
+            echo "- **Client ID:** \`$APP_ID\`"
+            echo "- **SPA redirect URI:** $REDIRECT"
+            echo ""
+            echo "Next: set the \`MAIL_MS_CLIENT_ID\` secret to the Client ID above, then re-run **Deploy Web to Azure Static Web Apps**."
+          } >> "$GITHUB_STEP_SUMMARY"

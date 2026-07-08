@@ -7,8 +7,8 @@ Multi-provider email + calendar middleware (Microsoft 365 / Google), built for A
 - **Resource Group**: EnterpriseDS_ResourceGRP
 - **Subscription**: 09594120-1b35-4e21-84c6-451ac27175a3
 - **Tenant**: ee633423-c321-413c-a191-ace8b07e4196
-- **Function App**: mail-api (mail-api.azurewebsites.net) — `api/`
-- **Static Web App**: mail-web — `web/`
+- **Function App**: enterpriseds-mail-api (enterpriseds-mail-api.azurewebsites.net) — `api/`
+- **Static Web App**: enterpriseds-mail-web — `web/`
 - **Storage Account**: n8nstxpdthydai6fkm (shared with job-platform)
 - **Storage Tables**: EmailCalendarData, AccountConfig
 - **Function region**: eastus  •  **Static Web App region**: eastus2
@@ -27,18 +27,18 @@ Everything runs through Actions using the org `AZURE_*` secrets. Default branch:
 
 ## Required GitHub Secrets
 
-Shared org secrets (already present):
+All reused from existing org secrets — nothing new to add:
 - `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`
 - `AZURE_STORAGE_CONNECTION_STRING`
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — Google OAuth client (API runtime + web build)
 
-App-specific secrets to add (OAuth credentials for this app):
-- `MAIL_GOOGLE_CLIENT_ID` — Google OAuth client ID (API + web build)
-- `MAIL_GOOGLE_CLIENT_SECRET` — Google OAuth client secret (API)
-- `MAIL_MS_CLIENT_ID` — Microsoft Entra app client ID (web build)
+Secret → setting mapping:
+- Web build: `VITE_MS_CLIENT_ID` ← `AZURE_CLIENT_ID`, `VITE_GOOGLE_CLIENT_ID` ← `GOOGLE_CLIENT_ID`
+- API runtime: `AZURE_STORAGE_CONNECTION_STRING`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
 
-The web build reads `VITE_MS_CLIENT_ID` / `VITE_GOOGLE_CLIENT_ID` at build time
-(injected from the secrets above). The API reads `AZURE_STORAGE_CONNECTION_STRING`,
-`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` at runtime.
+The Microsoft web sign-in reuses the Entra app behind `AZURE_CLIENT_ID`; that app
+registration needs the Static Web App URL added as a redirect URI and delegated
+Mail/Calendar scopes for the Connect flow to complete.
 
 ## Local Dev
 

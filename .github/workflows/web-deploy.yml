@@ -10,7 +10,7 @@ on:
 
 env:
   RESOURCE_GROUP: EnterpriseDS_ResourceGRP
-  STATIC_WEB_APP: mail-web
+  STATIC_WEB_APP: enterpriseds-mail-web
 
 jobs:
   build_and_deploy:
@@ -27,8 +27,8 @@ jobs:
 
       - name: Install and Build
         env:
-          VITE_MS_CLIENT_ID: ${{ secrets.MAIL_MS_CLIENT_ID }}
-          VITE_GOOGLE_CLIENT_ID: ${{ secrets.MAIL_GOOGLE_CLIENT_ID }}
+          VITE_MS_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
         run: |
           cd web
           npm ci

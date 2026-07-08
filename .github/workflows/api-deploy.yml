@@ -10,7 +10,7 @@ on:
 
 env:
   RESOURCE_GROUP: EnterpriseDS_ResourceGRP
-  FUNCTION_APP: mail-api
+  FUNCTION_APP: enterpriseds-mail-api
 
 jobs:
   deploy:

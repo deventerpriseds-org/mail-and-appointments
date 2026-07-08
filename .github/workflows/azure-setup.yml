@@ -7,7 +7,7 @@ on:
 
 env:
   RESOURCE_GROUP: EnterpriseDS_ResourceGRP
-  FUNCTION_APP: mail-api
+  FUNCTION_APP: enterpriseds-mail-api
 
 jobs:
   setup:
@@ -32,8 +32,8 @@ jobs:
             --resource-group "$RESOURCE_GROUP" \
             --settings \
               "AZURE_STORAGE_CONNECTION_STRING=${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}" \
-              "GOOGLE_CLIENT_ID=${{ secrets.MAIL_GOOGLE_CLIENT_ID }}" \
-              "GOOGLE_CLIENT_SECRET=${{ secrets.MAIL_GOOGLE_CLIENT_SECRET }}" \
+              "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" \
+              "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" \
               "NODE_ENV=production"
 
       - name: Verify tables

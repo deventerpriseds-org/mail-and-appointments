@@ -9,8 +9,8 @@ on:
 env:
   RESOURCE_GROUP: EnterpriseDS_ResourceGRP
   STORAGE_ACCOUNT: n8nstxpdthydai6fkm
-  FUNCTION_APP: mail-api
-  STATIC_WEB_APP: mail-web
+  FUNCTION_APP: enterpriseds-mail-api
+  STATIC_WEB_APP: enterpriseds-mail-web
   FUNCTION_LOCATION: eastus
   SWA_LOCATION: eastus2   # Static Web Apps are only offered in a few regions
 

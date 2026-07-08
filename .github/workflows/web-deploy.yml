@@ -11,6 +11,7 @@ on:
 env:
   RESOURCE_GROUP: EnterpriseDS_ResourceGRP
   STATIC_WEB_APP: enterpriseds-mail-web
+  MS_APP_NAME: enterpriseds-mail-web
 
 jobs:
   build_and_deploy:
@@ -25,22 +26,37 @@ jobs:
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
 
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+
+      - name: Resolve Microsoft sign-in client ID
+        id: ms
+        env:
+          FALLBACK_MS_CLIENT_ID: ${{ secrets.MAIL_MS_CLIENT_ID }}
+        run: |
+          # Look up the dedicated Entra app by name (SP owns it after the
+          # "Provision Entra App" workflow runs; requires Graph
+          # Application.ReadWrite.OwnedBy). Fall back to the MAIL_MS_CLIENT_ID
+          # secret if the lookup returns nothing, so the build never breaks.
+          MS_ID=$(az ad app list --display-name "$MS_APP_NAME" --query "[0].appId" -o tsv 2>/dev/null || true)
+          if [ -z "$MS_ID" ] || [ "$MS_ID" = "null" ]; then
+            MS_ID="$FALLBACK_MS_CLIENT_ID"
+            echo "Entra app lookup empty; using MAIL_MS_CLIENT_ID fallback (set: $([ -n "$MS_ID" ] && echo yes || echo no))."
+          else
+            echo "Resolved Microsoft client ID from Entra app '$MS_APP_NAME'."
+          fi
+          echo "client_id=$MS_ID" >> "$GITHUB_OUTPUT"
+
       - name: Install and Build
         env:
-          # Dedicated Entra SPA app for web sign-in (NOT the deploy service
-          # principal). Public client, no secret. Add MAIL_MS_CLIENT_ID as a
-          # repo/org secret with the new app registration's Application ID.
-          VITE_MS_CLIENT_ID: ${{ secrets.MAIL_MS_CLIENT_ID }}
+          VITE_MS_CLIENT_ID: ${{ steps.ms.outputs.client_id }}
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
         run: |
           cd web
           npm ci
           npm run build
-
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
 
       - name: Get Static Web App token
         id: swa_token

@@ -32,11 +32,11 @@ Reused from existing org secrets:
 - `AZURE_STORAGE_CONNECTION_STRING`
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — Google OAuth client (API runtime + web build)
 
-App-specific secret to add:
-- `MAIL_MS_CLIENT_ID` — Application (client) ID of the **dedicated Entra SPA app** for the Microsoft web sign-in (see below). Public client, **no secret**.
+App-specific secret (optional fallback):
+- `MAIL_MS_CLIENT_ID` — Application (client) ID of the **dedicated Entra SPA app** for the Microsoft web sign-in (see below). Public client, **no secret**. Normally you don't set this: `web-deploy.yml` resolves the client ID from the Entra app by name at build time. It's only used as a fallback when that lookup returns nothing.
 
 Secret → setting mapping:
-- Web build: `VITE_MS_CLIENT_ID` ← `MAIL_MS_CLIENT_ID`, `VITE_GOOGLE_CLIENT_ID` ← `GOOGLE_CLIENT_ID`
+- Web build: `VITE_MS_CLIENT_ID` ← resolved from the `enterpriseds-mail-web` Entra app at deploy time (fallback: `MAIL_MS_CLIENT_ID` secret), `VITE_GOOGLE_CLIENT_ID` ← `GOOGLE_CLIENT_ID`
 - API runtime: `AZURE_STORAGE_CONNECTION_STRING`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
 
 ### Microsoft web sign-in — dedicated Entra app

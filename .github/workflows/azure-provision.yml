@@ -1,0 +1,60 @@
+name: Azure Infrastructure Provision
+# Run this manually ONCE to create the Function App + Static Web App.
+# Reuses the existing storage account (n8nstxpdthydai6fkm) in EnterpriseDS_ResourceGRP.
+# Idempotent: skips resources that already exist.
+
+on:
+  workflow_dispatch:
+
+env:
+  RESOURCE_GROUP: EnterpriseDS_ResourceGRP
+  STORAGE_ACCOUNT: n8nstxpdthydai6fkm
+  FUNCTION_APP: mail-api
+  STATIC_WEB_APP: mail-web
+  FUNCTION_LOCATION: eastus
+  SWA_LOCATION: eastus2   # Static Web Apps are only offered in a few regions
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+
+      - name: Create Function App (if missing)
+        run: |
+          if az functionapp show --name "$FUNCTION_APP" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+            echo "Function App $FUNCTION_APP already exists — skipping."
+          else
+            echo "Creating Function App $FUNCTION_APP ..."
+            az functionapp create \
+              --name "$FUNCTION_APP" \
+              --resource-group "$RESOURCE_GROUP" \
+              --storage-account "$STORAGE_ACCOUNT" \
+              --consumption-plan-location "$FUNCTION_LOCATION" \
+              --runtime node \
+              --runtime-version 22 \
+              --functions-version 4 \
+              --os-type Linux
+          fi
+
+      - name: Create Static Web App (if missing)
+        run: |
+          if az staticwebapp show --name "$STATIC_WEB_APP" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+            echo "Static Web App $STATIC_WEB_APP already exists — skipping."
+          else
+            echo "Creating Static Web App $STATIC_WEB_APP ..."
+            az staticwebapp create \
+              --name "$STATIC_WEB_APP" \
+              --resource-group "$RESOURCE_GROUP" \
+              --location "$SWA_LOCATION"
+          fi
+
+      - name: Report endpoints
+        run: |
+          echo "Function App hostname:"
+          az functionapp show --name "$FUNCTION_APP" --resource-group "$RESOURCE_GROUP" --query "defaultHostName" -o tsv
+          echo "Static Web App hostname:"
+          az staticwebapp show --name "$STATIC_WEB_APP" --resource-group "$RESOURCE_GROUP" --query "defaultHostname" -o tsv

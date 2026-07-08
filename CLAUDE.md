@@ -58,6 +58,26 @@ principal. One-time portal setup:
 external/personal accounts, flip the app to multi-tenant and set `VITE_MS_AUTHORITY`
 (e.g. `https://login.microsoftonline.com/organizations`) in `web-deploy.yml`.
 
+#### Provisioning the Entra app programmatically
+
+The `azure-entra-app.yml` workflow (Actions → *Provision Entra App (web sign-in)*)
+creates/updates the app registration and sets its SPA redirect URI, then prints the
+Client ID to the run summary. It requires the deploy service principal
+(`AZURE_CLIENT_ID`) to hold Microsoft Graph **`Application.ReadWrite.OwnedBy`** with
+admin consent — a one-time grant by a Global/Privileged Role Administrator:
+
+```bash
+SP_APP_ID=<enterpriseds-github-actions app id>
+GRAPH=00000003-0000-0000-c000-000000000000
+ROLE=18a4783c-866b-4cc7-a460-3d0e455a5c31   # Application.ReadWrite.OwnedBy
+az ad app permission add --id "$SP_APP_ID" --api "$GRAPH" --api-permissions "${ROLE}=Role"
+az ad app permission admin-consent --id "$SP_APP_ID"
+```
+
+`OwnedBy` lets the SP create and manage only the app registrations it owns (low blast
+radius). It does not permit self-granting admin consent for an app's API permissions,
+which is fine here — the Graph sign-in scopes consent at first user sign-in.
+
 ## Local Dev
 
 ```bash

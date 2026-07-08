@@ -1,0 +1,55 @@
+name: Confirm Azure Client ID
+# Diagnostic only — run manually to confirm the AZURE_CLIENT_ID app registration
+# is the correct one for the Microsoft web sign-in (redirect URIs + Graph scopes).
+# The client-ID value itself is auto-masked by GitHub; this reports the app's
+# metadata, which is what actually tells us whether it's the right app.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  confirm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+
+      - name: Account / tenant / subscription context
+        run: |
+          echo "== az account show =="
+          az account show --query "{subscriptionId:id, subscriptionName:name, tenantId:tenantId, loggedInAs:user.name, userType:user.type}" -o yaml
+          echo
+          echo "Expected tenant:       ee633423-c321-413c-a191-ace8b07e4196"
+          echo "Expected subscription: 09594120-1b35-4e21-84c6-451ac27175a3"
+
+      - name: Service principal for AZURE_CLIENT_ID
+        env:
+          CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        run: |
+          echo "== az ad sp show =="
+          az ad sp show --id "$CLIENT_ID" \
+            --query "{displayName:displayName, appId:appId, appOwnerOrgId:appOwnerOrganizationId, spType:servicePrincipalType, signInAudience:signInAudience}" \
+            -o yaml || echo "!! Could not read the service principal (SP may lack Graph directory-read permission)."
+
+      - name: App registration — redirect URIs & delegated scopes
+        env:
+          CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        run: |
+          echo "== az ad app show =="
+          if ! az ad app show --id "$CLIENT_ID" \
+                --query "{displayName:displayName, signInAudience:signInAudience, webRedirectUris:web.redirectUris, spaRedirectUris:spa.redirectUris, requiredResourceAccess:requiredResourceAccess}" \
+                -o yaml; then
+            echo "!! Could not read the app registration."
+            echo "   This usually means the deploy service principal lacks Microsoft Graph"
+            echo "   directory-read permission (Application.Read.All / Directory.Read.All),"
+            echo "   OR AZURE_CLIENT_ID has no app registration (SP-only)."
+            exit 0
+          fi
+          echo
+          echo "Checklist for Microsoft web sign-in (msalConfig.ts uses authority /common"
+          echo "and scopes User.Read, Mail.Read, Calendars.Read):"
+          echo "  [ ] signInAudience allows the users who will sign in (AzureADMultipleOrgs for /common)"
+          echo "  [ ] spaRedirectUris includes the enterpriseds-mail-web URL"
+          echo "  [ ] requiredResourceAccess grants delegated Graph User.Read / Mail.Read / Calendars.Read"

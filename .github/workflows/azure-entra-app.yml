@@ -3,8 +3,9 @@ name: Provision Entra App (web sign-in)
 # web Microsoft sign-in, and points its SPA redirect URI at the Static Web App.
 #
 # Prerequisite (one-time, admin): the deploy service principal (AZURE_CLIENT_ID)
-# must hold Microsoft Graph **Application.ReadWrite.OwnedBy** with admin consent.
-# Without it, the az ad steps fail with "Insufficient privileges".
+# must hold Microsoft Graph **Application.ReadWrite.All** with admin consent
+# (see CLAUDE.md for the grant commands). Without it, the az ad steps fail with
+# "Insufficient privileges".
 #
 # Idempotent. After it runs, copy the printed Client ID into the MAIL_MS_CLIENT_ID
 # secret and re-run "Deploy Web".

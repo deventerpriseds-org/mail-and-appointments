@@ -8,6 +8,7 @@ on:
 env:
   RESOURCE_GROUP: EnterpriseDS_ResourceGRP
   FUNCTION_APP: enterpriseds-mail-api
+  STATIC_WEB_APP: enterpriseds-mail-web
 
 jobs:
   setup:
@@ -35,6 +36,17 @@ jobs:
               "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" \
               "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" \
               "NODE_ENV=production"
+
+      - name: Allow the Static Web App origin (CORS)
+        run: |
+          # The web (Static Web App) calls the API (Function App) cross-origin,
+          # so the Function App must allow the SWA origin.
+          HOST=$(az staticwebapp show --name "$STATIC_WEB_APP" --resource-group "$RESOURCE_GROUP" --query "defaultHostname" -o tsv)
+          ORIGIN="https://$HOST"
+          echo "Allowing CORS origin: $ORIGIN"
+          az functionapp cors add --name "$FUNCTION_APP" --resource-group "$RESOURCE_GROUP" --allowed-origins "$ORIGIN" || true
+          echo "Current allowed origins:"
+          az functionapp cors show --name "$FUNCTION_APP" --resource-group "$RESOURCE_GROUP" -o json
 
       - name: Verify tables
         run: |

@@ -106,5 +106,12 @@ secret**. Keep it separate from the deploy service principal.
 - **The web `build` runs `tsc` before `vite build`.** `import.meta.env` needs the Vite
   client types — add `web/src/vite-env.d.ts` with `/// <reference types="vite/client" />`
   or `tsc` fails. Does not show up under `npm run dev` (dev skips `tsc`).
+- **Web and API are separate origins in production.** The Static Web App host is not
+  the Function App host, and the default SWA tier has no linked backend — so relative
+  `/api/*` calls 404 (they hit the SWA, not the API). The frontend must call the API by
+  **absolute URL** via `VITE_API_BASE_URL` (`https://<function-app>.azurewebsites.net`),
+  and the Function App must allow the SWA origin via CORS
+  (`az functionapp cors add --allowed-origins https://<swa-host>`). Local `npm run dev`
+  hides this because the Vite proxy rewrites `/api` → `:7071`.
 - **Deploy from GitHub Actions, not the CCR container** — the container has no Azure
   creds; the sanctioned path is the Actions workflows (triggerable via the GitHub API).

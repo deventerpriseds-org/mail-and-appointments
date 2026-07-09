@@ -123,6 +123,10 @@ Hard-won during initial setup — read before repeating this pattern:
 - **Microsoft sign-in is client-side only** (MSAL browser + PKCE); the API performs no
   server-side Microsoft token exchange, so the web Entra app needs **no client secret**.
   Only Google requires a server secret (`GOOGLE_CLIENT_SECRET`).
+- **Web and API are separate origins in prod.** The frontend calls the API by absolute
+  URL (`VITE_API_BASE_URL` → `https://enterpriseds-mail-api.azurewebsites.net`), set in
+  `web-deploy.yml`; relative `/api/*` only works in dev via the Vite proxy. The Function
+  App allows the Static Web App origin via CORS (set in `azure-setup.yml`).
 - **Deploy Web auto-resolves the MS client ID** from the `enterpriseds-mail-web` Entra
   app by name at build time (needs the SP's Graph permission); `MAIL_MS_CLIENT_ID` is
   only a fallback. Run *Provision Entra App* once, then *Deploy Web* picks it up.

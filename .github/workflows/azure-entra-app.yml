@@ -37,22 +37,24 @@ jobs:
 
           APP_ID=$(az ad app list --display-name "$APP_NAME" --query "[0].appId" -o tsv 2>/dev/null || true)
           if [ -z "${APP_ID:-}" ] || [ "$APP_ID" = "null" ]; then
+            # Create via a direct Graph POST (with the SPA redirect URI inline).
+            # `az ad app create` fails under service-principal auth because it tries
+            # to auto-add the signed-in *user* as owner; a raw POST avoids that.
             echo "Creating app registration $APP_NAME ..."
-            APP_ID=$(az ad app create \
-              --display-name "$APP_NAME" \
-              --sign-in-audience AzureADMyOrg \
-              --query appId -o tsv)
+            CREATED=$(az rest --method POST \
+              --uri "https://graph.microsoft.com/v1.0/applications" \
+              --headers 'Content-Type=application/json' \
+              --body "{\"displayName\":\"$APP_NAME\",\"signInAudience\":\"AzureADMyOrg\",\"spa\":{\"redirectUris\":[\"$REDIRECT\"]}}")
+            APP_ID=$(echo "$CREATED" | jq -r '.appId')
+            OBJ_ID=$(echo "$CREATED" | jq -r '.id')
           else
-            echo "App registration already exists: $APP_ID"
+            echo "App registration already exists: $APP_ID; ensuring SPA redirect URI ..."
+            OBJ_ID=$(az ad app show --id "$APP_ID" --query id -o tsv)
+            az rest --method PATCH \
+              --uri "https://graph.microsoft.com/v1.0/applications/$OBJ_ID" \
+              --headers 'Content-Type=application/json' \
+              --body "{\"spa\":{\"redirectUris\":[\"$REDIRECT\"]}}"
           fi
-
-          OBJ_ID=$(az ad app show --id "$APP_ID" --query id -o tsv)
-
-          echo "Setting SPA redirect URI (Graph PATCH; az has no SPA flag) ..."
-          az rest --method PATCH \
-            --uri "https://graph.microsoft.com/v1.0/applications/$OBJ_ID" \
-            --headers 'Content-Type=application/json' \
-            --body "{\"spa\":{\"redirectUris\":[\"$REDIRECT\"]}}"
 
           {
             echo "### Entra app ready"

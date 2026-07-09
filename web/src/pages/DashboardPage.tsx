@@ -10,6 +10,17 @@ interface CalendarEvent {
   provider: string;
 }
 
+interface MailMessage {
+  id: string;
+  subject: string;
+  from: string;
+  receivedAt: string;
+  folder: string;
+  provider: string;
+  webLink?: string;
+  isRead?: boolean;
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { accounts } = useAccounts();
@@ -17,6 +28,8 @@ export default function DashboardPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [messages, setMessages] = useState<MailMessage[]>([]);
+  const [mailLoading, setMailLoading] = useState(false);
 
   useEffect(() => {
     if (accounts.length === 0) {
@@ -25,6 +38,33 @@ export default function DashboardPage() {
     }
     fetchEvents();
   }, [date, accounts]);
+
+  useEffect(() => {
+    if (accounts.length > 0) fetchMessages();
+  }, [accounts]);
+
+  async function fetchMessages() {
+    setMailLoading(true);
+    const all: MailMessage[] = [];
+    for (const account of accounts) {
+      try {
+        const res = await fetch(apiUrl("/messages"), {
+          headers: {
+            Authorization: `Bearer ${account.provider}:${account.accountId}:${account.accessToken}`,
+          },
+        });
+        if (res.ok) {
+          const data = (await res.json()) as MailMessage[];
+          all.push(...data);
+        }
+      } catch {
+        /* ignore per-account failures */
+      }
+    }
+    all.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+    setMessages(all);
+    setMailLoading(false);
+  }
 
   async function fetchEvents() {
     setLoading(true);
@@ -72,6 +112,38 @@ export default function DashboardPage() {
           </span>
         ))}
       </div>
+
+      <section style={styles.section}>
+        <h2 style={{ margin: "0 0 16px" }}>Mail</h2>
+        {mailLoading && <p style={styles.muted}>Loading mail...</p>}
+        {!mailLoading && messages.length === 0 && (
+          <p style={styles.muted}>
+            No emails from your selected folders yet. Pick folders under &ldquo;Manage Accounts.&rdquo;
+          </p>
+        )}
+        {messages.map((m) => (
+          <div key={`${m.provider}-${m.id}`} style={styles.eventCard}>
+            <div style={styles.eventTime}>
+              {m.receivedAt
+                ? new Date(m.receivedAt).toLocaleDateString([], { month: "short", day: "numeric" })
+                : ""}
+            </div>
+            <div style={styles.eventDetails}>
+              <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                {m.webLink ? (
+                  <a href={m.webLink} target="_blank" rel="noreferrer" style={styles.mailSubjectLink}>
+                    {m.subject}
+                  </a>
+                ) : (
+                  <strong>{m.subject}</strong>
+                )}
+                <span style={styles.mailFrom}>{m.from}</span>
+              </div>
+              <span style={styles.folderBadge}>{m.folder}</span>
+            </div>
+          </div>
+        ))}
+      </section>
 
       <section style={styles.section}>
         <div style={styles.sectionHeader}>
@@ -126,4 +198,7 @@ const styles: Record<string, React.CSSProperties> = {
   eventTime: { minWidth: 60, color: "#555", fontSize: 14 },
   eventDetails: { display: "flex", alignItems: "center", gap: 10, flex: 1 },
   badge: { fontSize: 11, borderRadius: 4, padding: "2px 8px", color: "#333" },
+  mailSubjectLink: { fontWeight: 600, color: "#0066cc", textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  mailFrom: { fontSize: 12, color: "#777", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  folderBadge: { fontSize: 11, borderRadius: 4, padding: "2px 8px", background: "#eef", color: "#339", marginLeft: "auto", whiteSpace: "nowrap" },
 };

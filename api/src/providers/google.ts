@@ -31,6 +31,62 @@ export interface CalendarEvent {
   provider: string;
 }
 
+export interface MailMessage {
+  id: string;
+  subject: string;
+  from: string;
+  receivedAt: string;
+  folder: string;
+  provider: string;
+  webLink?: string;
+  isRead?: boolean;
+}
+
+export async function getGoogleMessages(
+  accessToken: string,
+  labelIds: string[]
+): Promise<MailMessage[]> {
+  const auth = oAuth2Client(accessToken);
+  const gmail = google.gmail({ version: "v1", auth });
+
+  const labelsRes = await gmail.users.labels.list({ userId: "me" });
+  const labelNames = new Map(
+    (labelsRes.data.labels ?? []).map((l) => [l.id ?? "", l.name ?? ""])
+  );
+
+  const out: MailMessage[] = [];
+  for (const labelId of labelIds) {
+    const list = await gmail.users.messages.list({
+      userId: "me",
+      labelIds: [labelId],
+      maxResults: 15,
+    });
+    for (const msg of list.data.messages ?? []) {
+      if (!msg.id) continue;
+      const full = await gmail.users.messages.get({
+        userId: "me",
+        id: msg.id,
+        format: "metadata",
+        metadataHeaders: ["Subject", "From"],
+      });
+      const headers = full.data.payload?.headers ?? [];
+      const header = (name: string) =>
+        headers.find((h) => h.name === name)?.value ?? "";
+      out.push({
+        id: msg.id,
+        subject: header("Subject") || "(no subject)",
+        from: header("From"),
+        receivedAt: new Date(Number(full.data.internalDate ?? 0)).toISOString(),
+        folder: labelNames.get(labelId) ?? labelId,
+        provider: "google",
+      });
+    }
+  }
+
+  out.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+  return out.slice(0, 50);
+}
+
 export async function getGoogleInboxes(accessToken: string): Promise<Inbox[]> {
   const auth = oAuth2Client(accessToken);
   const gmail = google.gmail({ version: "v1", auth });

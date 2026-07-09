@@ -31,6 +31,17 @@ export interface CalendarEvent {
   provider: string;
 }
 
+export interface MailMessage {
+  id: string;
+  subject: string;
+  from: string;
+  receivedAt: string;
+  folder: string;
+  provider: string;
+  webLink?: string;
+  isRead?: boolean;
+}
+
 export async function getMicrosoftInboxes(accessToken: string): Promise<Inbox[]> {
   const client = graphClient(accessToken);
   const me = await client.api("/me").get() as { id: string };
@@ -66,6 +77,59 @@ export async function getMicrosoftInboxes(accessToken: string): Promise<Inbox[]>
 
   await walk("/me/mailFolders", "", 0);
   return folders;
+}
+
+export async function getMicrosoftMessages(
+  accessToken: string,
+  folderIds: string[]
+): Promise<MailMessage[]> {
+  const client = graphClient(accessToken);
+  const out: MailMessage[] = [];
+
+  for (const folderId of folderIds) {
+    let folderName = "";
+    try {
+      const folder = await client
+        .api(`/me/mailFolders/${folderId}`)
+        .select("displayName")
+        .get() as { displayName: string };
+      folderName = folder.displayName;
+    } catch {
+      continue; // folder no longer exists / not accessible
+    }
+
+    const res = await client
+      .api(`/me/mailFolders/${folderId}/messages`)
+      .select("id,subject,from,receivedDateTime,webLink,isRead")
+      .top(15)
+      .orderby("receivedDateTime DESC")
+      .get() as {
+      value: Array<{
+        id: string;
+        subject?: string;
+        from?: { emailAddress?: { address?: string } };
+        receivedDateTime?: string;
+        webLink?: string;
+        isRead?: boolean;
+      }>;
+    };
+
+    for (const m of res.value) {
+      out.push({
+        id: m.id,
+        subject: m.subject || "(no subject)",
+        from: m.from?.emailAddress?.address ?? "",
+        receivedAt: m.receivedDateTime ?? "",
+        folder: folderName,
+        provider: "microsoft",
+        webLink: m.webLink,
+        isRead: m.isRead,
+      });
+    }
+  }
+
+  out.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+  return out.slice(0, 50);
 }
 
 export async function getMicrosoftCalendars(accessToken: string): Promise<CalendarItem[]> {

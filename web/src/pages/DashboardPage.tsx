@@ -91,6 +91,21 @@ export default function DashboardPage() {
     setLoading(false);
   }
 
+  // Group mail by folder, keeping folders ordered by most-recent message
+  // (messages arrive already sorted newest-first).
+  const folderGroups: Array<[string, MailMessage[]]> = [];
+  const groupIndex = new Map<string, MailMessage[]>();
+  for (const m of messages) {
+    const key = m.folder || "(unfiled)";
+    let bucket = groupIndex.get(key);
+    if (!bucket) {
+      bucket = [];
+      groupIndex.set(key, bucket);
+      folderGroups.push([key, bucket]);
+    }
+    bucket.push(m);
+  }
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
@@ -121,26 +136,33 @@ export default function DashboardPage() {
             No emails from your selected folders yet. Pick folders under &ldquo;Manage Accounts.&rdquo;
           </p>
         )}
-        {messages.map((m) => (
-          <div key={`${m.provider}-${m.id}`} style={styles.eventCard}>
-            <div style={styles.eventTime}>
-              {m.receivedAt
-                ? new Date(m.receivedAt).toLocaleDateString([], { month: "short", day: "numeric" })
-                : ""}
+        {folderGroups.map(([folder, msgs]) => (
+          <div key={folder} style={styles.mailGroup}>
+            <div style={styles.mailGroupHeader}>
+              <span>{folder}</span>
+              <span style={styles.mailCount}>{msgs.length}</span>
             </div>
-            <div style={styles.eventDetails}>
-              <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                {m.webLink ? (
-                  <a href={m.webLink} target="_blank" rel="noreferrer" style={styles.mailSubjectLink}>
-                    {m.subject}
-                  </a>
-                ) : (
-                  <strong>{m.subject}</strong>
-                )}
-                <span style={styles.mailFrom}>{m.from}</span>
+            {msgs.map((m) => (
+              <div key={`${m.provider}-${m.id}`} style={styles.eventCard}>
+                <div style={styles.eventTime}>
+                  {m.receivedAt
+                    ? new Date(m.receivedAt).toLocaleDateString([], { month: "short", day: "numeric" })
+                    : ""}
+                </div>
+                <div style={styles.eventDetails}>
+                  <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                    {m.webLink ? (
+                      <a href={m.webLink} target="_blank" rel="noreferrer" style={styles.mailSubjectLink}>
+                        {m.subject}
+                      </a>
+                    ) : (
+                      <strong>{m.subject}</strong>
+                    )}
+                    <span style={styles.mailFrom}>{m.from}</span>
+                  </div>
+                </div>
               </div>
-              <span style={styles.folderBadge}>{m.folder}</span>
-            </div>
+            ))}
           </div>
         ))}
       </section>
@@ -201,4 +223,7 @@ const styles: Record<string, React.CSSProperties> = {
   mailSubjectLink: { fontWeight: 600, color: "#0066cc", textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   mailFrom: { fontSize: 12, color: "#777", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   folderBadge: { fontSize: 11, borderRadius: 4, padding: "2px 8px", background: "#eef", color: "#339", marginLeft: "auto", whiteSpace: "nowrap" },
+  mailGroup: { marginBottom: 24 },
+  mailGroupHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "6px 0", borderBottom: "2px solid #e6e6e6", marginBottom: 4, fontWeight: 700, color: "#333", fontSize: 13, textTransform: "uppercase", letterSpacing: 0.3 },
+  mailCount: { fontSize: 11, fontWeight: 600, color: "#556", background: "#eef", borderRadius: 10, padding: "1px 8px" },
 };

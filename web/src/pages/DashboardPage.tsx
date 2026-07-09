@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccounts } from "../auth/AccountContext";
+import { apiUrl } from "../api";
 
 interface CalendarEvent {
   id: string;
@@ -32,7 +33,7 @@ export default function DashboardPage() {
 
     for (const account of accounts) {
       try {
-        const res = await fetch(`/api/calendar?date=${date}`, {
+        const res = await fetch(apiUrl(`/calendar?date=${date}`), {
           headers: {
             Authorization: `Bearer ${account.provider}:${account.accountId}:${account.accessToken}`,
           },

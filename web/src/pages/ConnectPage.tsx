@@ -5,6 +5,7 @@ import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { msScopes } from "../auth/msalConfig";
 import { buildGoogleAuthUrl } from "../auth/googleConfig";
 import { useAccounts, ConnectedAccount } from "../auth/AccountContext";
+import { apiUrl } from "../api";
 
 export default function ConnectPage() {
   const navigate = useNavigate();
@@ -25,7 +26,7 @@ export default function ConnectPage() {
 
   async function exchangeGoogleCode(code: string) {
     try {
-      const res = await fetch("/api/auth/google/token", {
+      const res = await fetch(apiUrl("/auth/google/token"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code, redirectUri: window.location.origin }),

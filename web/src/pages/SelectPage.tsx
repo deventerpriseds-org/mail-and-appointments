@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccounts } from "../auth/AccountContext";
+import { apiUrl } from "../api";
 
 interface Inbox {
   id: string;
@@ -46,8 +47,8 @@ export default function SelectPage() {
       };
 
       const [inboxRes, calRes] = await Promise.allSettled([
-        fetch(`/api/inboxes`, { headers }),
-        fetch(`/api/calendars`, { headers }),
+        fetch(apiUrl("/inboxes"), { headers }),
+        fetch(apiUrl("/calendars"), { headers }),
       ]);
 
       if (inboxRes.status === "fulfilled" && inboxRes.value.ok) {
@@ -88,7 +89,7 @@ export default function SelectPage() {
         Authorization: `Bearer ${account.provider}:${account.accountId}:${account.accessToken}`,
         "Content-Type": "application/json",
       };
-      await fetch("/api/config", {
+      await fetch(apiUrl("/config"), {
         method: "POST",
         headers,
         body: JSON.stringify({

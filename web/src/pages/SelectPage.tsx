@@ -8,6 +8,8 @@ interface Inbox {
   name: string;
   provider: string;
   accountId: string;
+  path?: string;
+  depth?: number;
 }
 
 interface Calendar {
@@ -67,9 +69,24 @@ export default function SelectPage() {
   }
 
   function toggleInbox(id: string) {
+    const target = inboxes.find((i) => i.id === id);
+    if (!target) return;
+    // Checking a parent folder selects it and all of its subfolders; unchecking
+    // clears them too. Descendants are matched by path prefix within the account.
+    const affected = inboxes.filter(
+      (i) =>
+        i.id === id ||
+        (!!target.path &&
+          i.accountId === target.accountId &&
+          !!i.path &&
+          i.path.startsWith(`${target.path} / `))
+    );
     setSelectedInboxes((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      const selecting = !prev.has(id);
+      for (const f of affected) {
+        selecting ? next.add(f.id) : next.delete(f.id);
+      }
       return next;
     });
   }
@@ -112,8 +129,17 @@ export default function SelectPage() {
       <section style={styles.section}>
         <h2>Inboxes</h2>
         {inboxes.length === 0 && <p style={styles.empty}>No inboxes found.</p>}
+        {inboxes.length > 0 && (
+          <p style={styles.hint}>
+            Pick individual folders/subfolders to monitor. Checking a folder also
+            selects everything nested under it.
+          </p>
+        )}
         {inboxes.map((inbox) => (
-          <label key={inbox.id} style={styles.checkRow}>
+          <label
+            key={inbox.id}
+            style={{ ...styles.checkRow, paddingLeft: 8 + (inbox.depth ?? 0) * 22 }}
+          >
             <input
               type="checkbox"
               checked={selectedInboxes.has(inbox.id)}
@@ -159,5 +185,6 @@ const styles: Record<string, React.CSSProperties> = {
   checkRow: { display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #f0f0f0", cursor: "pointer" },
   badge: { fontSize: 11, background: "#eef", color: "#339", borderRadius: 4, padding: "2px 6px" },
   empty: { color: "#888", fontStyle: "italic" },
+  hint: { color: "#666", fontSize: 13, marginBottom: 12 },
   saveBtn: { padding: "12px 24px", fontSize: 16, background: "#0066cc", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" },
 };

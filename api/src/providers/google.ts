@@ -11,6 +11,10 @@ export interface Inbox {
   name: string;
   provider: string;
   accountId: string;
+  /** Full label path, e.g. "Jobs / LinkedIn". */
+  path?: string;
+  /** Nesting depth (0 = top level) for indenting the picker. */
+  depth?: number;
 }
 
 export interface CalendarItem {
@@ -38,12 +42,20 @@ export async function getGoogleInboxes(accessToken: string): Promise<Inbox[]> {
 
   return labels
     .filter((l) => l.type === "system" || l.type === "user")
-    .map((l) => ({
-      id: l.id ?? "",
-      name: l.name ?? "",
-      provider: "google",
-      accountId,
-    }));
+    .map((l) => {
+      // Gmail nests user labels with "/" (e.g. "Jobs/LinkedIn"); surface that
+      // as a path + depth so nested labels are selectable like Outlook folders.
+      const full = l.name ?? "";
+      const parts = full.split("/");
+      return {
+        id: l.id ?? "",
+        name: parts[parts.length - 1] || full,
+        provider: "google",
+        accountId,
+        path: parts.join(" / "),
+        depth: parts.length - 1,
+      };
+    });
 }
 
 export async function getGoogleCalendars(accessToken: string): Promise<CalendarItem[]> {

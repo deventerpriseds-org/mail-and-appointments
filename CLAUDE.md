@@ -87,3 +87,42 @@ scope it down to only apps the SP creates, swap in `Application.ReadWrite.OwnedB
 cd api && npm install && cp local.settings.json.example local.settings.json && npm start   # :7071
 cd web && npm install && npm run dev                                                        # :5173
 ```
+
+## Live resources (quick reference)
+
+- Web (Static Web App): https://victorious-field-096ac470f.7.azurestaticapps.net
+- API (Function App):   https://enterpriseds-mail-api.azurewebsites.net
+- Microsoft web sign-in Entra app: `enterpriseds-mail-web`, client ID `446a1524-708a-4aae-a172-20b0f5eeda1c` (single tenant), SPA redirect URI = the Static Web App URL above.
+
+## Lessons learned / gotchas
+
+Hard-won during initial setup — read before repeating this pattern:
+
+- **This repo lives in the `deventerpriseds-org` GitHub org** (same org as
+  `boost-application-packet-platform`/job-platform), because that's where the
+  `AZURE_*` / `GOOGLE_*` Actions secrets are defined. GitHub org secrets are **not**
+  shared across orgs, and org secrets scoped to "Selected repositories" only reach
+  repos on their access list. Symptom of a missing/unshared secret: `azure/login`
+  fails with `Not all parameters are provided in 'creds'` (the values arrive empty).
+- **`az ad app create` fails when the caller is a service principal** with
+  `Resource '...' does not exist or one of its queried reference-property objects
+  are not present` — it tries to auto-add the signed-in *user* as owner and there is
+  none. Create app registrations with a direct Graph `POST /applications` instead
+  (see `azure-entra-app.yml`).
+- **`graph.microsoft.com` is NOT reachable from Claude Code web/CCR containers** (the
+  egress proxy blocks it); `management.azure.com` and `login.microsoftonline.com`
+  are. So Microsoft Graph / Entra admin actions — notably the SP permission grant and
+  admin consent — must be run from a normal machine (`az login` as an admin) or the
+  portal, never from a web session. Azure Resource Manager work (Function App, Static
+  Web App, storage) is fine either place, and already runs in Actions.
+- **Static Web Apps exist only in a few regions** (using `eastus2`); **Function App
+  names are globally unique** across Azure (hence the `enterpriseds-` prefix).
+- **The web `build` runs `tsc` before `vite build`.** `import.meta.env` needs the
+  Vite client types (`web/src/vite-env.d.ts` → `/// <reference types="vite/client" />`)
+  or `tsc` fails. This does **not** show up under `npm run dev` (dev skips `tsc`).
+- **Microsoft sign-in is client-side only** (MSAL browser + PKCE); the API performs no
+  server-side Microsoft token exchange, so the web Entra app needs **no client secret**.
+  Only Google requires a server secret (`GOOGLE_CLIENT_SECRET`).
+- **Deploy Web auto-resolves the MS client ID** from the `enterpriseds-mail-web` Entra
+  app by name at build time (needs the SP's Graph permission); `MAIL_MS_CLIENT_ID` is
+  only a fallback. Run *Provision Entra App* once, then *Deploy Web* picks it up.

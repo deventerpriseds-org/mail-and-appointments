@@ -42,15 +42,18 @@ export default function SelectPage() {
     setLoading(true);
     const allInboxes: Inbox[] = [];
     const allCalendars: Calendar[] = [];
+    const preInboxes = new Set<string>();
+    const preCalendars = new Set<string>();
 
     for (const account of accounts) {
       const headers = {
         Authorization: `Bearer ${account.provider}:${account.accountId}:${account.accessToken}`,
       };
 
-      const [inboxRes, calRes] = await Promise.allSettled([
+      const [inboxRes, calRes, cfgRes] = await Promise.allSettled([
         fetch(apiUrl("/inboxes"), { headers }),
         fetch(apiUrl("/calendars"), { headers }),
+        fetch(apiUrl("/config"), { headers }),
       ]);
 
       if (inboxRes.status === "fulfilled" && inboxRes.value.ok) {
@@ -61,10 +64,21 @@ export default function SelectPage() {
         const data = await calRes.value.json() as Calendar[];
         allCalendars.push(...data);
       }
+      // Pre-check whatever this account previously saved.
+      if (cfgRes.status === "fulfilled" && cfgRes.value.ok) {
+        const cfg = await cfgRes.value.json() as {
+          selectedInboxes?: string[];
+          selectedCalendars?: string[];
+        };
+        cfg.selectedInboxes?.forEach((id) => preInboxes.add(id));
+        cfg.selectedCalendars?.forEach((id) => preCalendars.add(id));
+      }
     }
 
     setInboxes(allInboxes);
     setCalendars(allCalendars);
+    setSelectedInboxes(preInboxes);
+    setSelectedCalendars(preCalendars);
     setLoading(false);
   }
 

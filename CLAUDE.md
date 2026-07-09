@@ -63,20 +63,23 @@ external/personal accounts, flip the app to multi-tenant and set `VITE_MS_AUTHOR
 The `azure-entra-app.yml` workflow (Actions → *Provision Entra App (web sign-in)*)
 creates/updates the app registration and sets its SPA redirect URI, then prints the
 Client ID to the run summary. It requires the deploy service principal
-(`AZURE_CLIENT_ID`) to hold Microsoft Graph **`Application.ReadWrite.OwnedBy`** with
+(`AZURE_CLIENT_ID`) to hold Microsoft Graph **`Application.ReadWrite.All`** with
 admin consent — a one-time grant by a Global/Privileged Role Administrator:
 
 ```bash
 SP_APP_ID=<enterpriseds-github-actions app id>
 GRAPH=00000003-0000-0000-c000-000000000000
-ROLE=18a4783c-866b-4cc7-a460-3d0e455a5c31   # Application.ReadWrite.OwnedBy
+ROLE=1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9   # Application.ReadWrite.All
 az ad app permission add --id "$SP_APP_ID" --api "$GRAPH" --api-permissions "${ROLE}=Role"
 az ad app permission admin-consent --id "$SP_APP_ID"
 ```
 
-`OwnedBy` lets the SP create and manage only the app registrations it owns (low blast
-radius). It does not permit self-granting admin consent for an app's API permissions,
-which is fine here — the Graph sign-in scopes consent at first user sign-in.
+`Application.ReadWrite.All` lets the SP create, read, and manage **any** app
+registration in the tenant (it also makes the `azure-confirm-id.yml` diagnostic's
+`az ad app show` work). Note the blast radius: a CI identity with this permission can
+write credentials into other apps, so guard the `AZURE_CLIENT_SECRET` accordingly. To
+scope it down to only apps the SP creates, swap in `Application.ReadWrite.OwnedBy`
+(role id `18a4783c-866b-4cc7-a460-3d0e455a5c31`) instead.
 
 ## Local Dev
 

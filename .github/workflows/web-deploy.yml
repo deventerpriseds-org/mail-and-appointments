@@ -36,10 +36,10 @@ jobs:
         env:
           FALLBACK_MS_CLIENT_ID: ${{ secrets.MAIL_MS_CLIENT_ID }}
         run: |
-          # Look up the dedicated Entra app by name (SP owns it after the
-          # "Provision Entra App" workflow runs; requires Graph
-          # Application.ReadWrite.OwnedBy). Fall back to the MAIL_MS_CLIENT_ID
-          # secret if the lookup returns nothing, so the build never breaks.
+          # Look up the dedicated Entra app by name (created by the "Provision
+          # Entra App" workflow; requires Graph Application.ReadWrite.All on the
+          # deploy SP). Fall back to the MAIL_MS_CLIENT_ID secret if the lookup
+          # returns nothing, so the build never breaks.
           MS_ID=$(az ad app list --display-name "$MS_APP_NAME" --query "[0].appId" -o tsv 2>/dev/null || true)
           if [ -z "$MS_ID" ] || [ "$MS_ID" = "null" ]; then
             MS_ID="$FALLBACK_MS_CLIENT_ID"

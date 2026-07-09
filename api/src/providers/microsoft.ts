@@ -11,6 +11,10 @@ export interface Inbox {
   name: string;
   provider: string;
   accountId: string;
+  /** Full folder path, e.g. "Inbox / LinkedIn". */
+  path?: string;
+  /** Nesting depth (0 = top level) for indenting the picker. */
+  depth?: number;
 }
 
 export interface CalendarItem {
@@ -30,15 +34,38 @@ export interface CalendarEvent {
 export async function getMicrosoftInboxes(accessToken: string): Promise<Inbox[]> {
   const client = graphClient(accessToken);
   const me = await client.api("/me").get() as { id: string };
-  const res = await client.api("/me/mailFolders").select("id,displayName").get() as {
-    value: Array<{ id: string; displayName: string }>;
-  };
-  return res.value.map((folder) => ({
-    id: folder.id,
-    name: folder.displayName,
-    provider: "microsoft",
-    accountId: me.id,
-  }));
+
+  const folders: Inbox[] = [];
+
+  // Recurse the full mail-folder tree so nested folders (e.g. Inbox/LinkedIn,
+  // Inbox/Ladders) are individually selectable, not just the top-level folders.
+  async function walk(endpoint: string, parentPath: string, depth: number): Promise<void> {
+    if (depth > 10) return; // guard against pathological nesting
+    const res = await client
+      .api(endpoint)
+      .select("id,displayName,childFolderCount")
+      .top(100)
+      .get() as {
+      value: Array<{ id: string; displayName: string; childFolderCount: number }>;
+    };
+    for (const folder of res.value) {
+      const path = parentPath ? `${parentPath} / ${folder.displayName}` : folder.displayName;
+      folders.push({
+        id: folder.id,
+        name: folder.displayName,
+        provider: "microsoft",
+        accountId: me.id,
+        path,
+        depth,
+      });
+      if (folder.childFolderCount > 0) {
+        await walk(`/me/mailFolders/${folder.id}/childFolders`, path, depth + 1);
+      }
+    }
+  }
+
+  await walk("/me/mailFolders", "", 0);
+  return folders;
 }
 
 export async function getMicrosoftCalendars(accessToken: string): Promise<CalendarItem[]> {

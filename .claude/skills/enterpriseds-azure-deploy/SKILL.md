@@ -1,117 +1,133 @@
 ---
 name: enterpriseds-azure-deploy
 description: >-
-  EnterpriseDS pattern for deploying a web app to Azure — API on an Azure
-  Functions app, web on an Azure Static Web App, provisioned and deployed via
-  GitHub Actions, with client-side Microsoft (MSAL) and Google sign-in. Use
-  whenever creating, provisioning, deploying, or debugging an EnterpriseDS app
-  on Azure Functions + Static Web Apps; setting up the GitHub Actions deploy
-  workflows; wiring the AZURE_* / GOOGLE_* org secrets; or configuring a
-  Microsoft Entra sign-in app. Covers resource naming, the workflow kit, the
-  secrets model, the Entra-app automation, and the setup gotchas so they are
-  not rediscovered.
+  EnterpriseDS pattern + shared infrastructure for shipping a web app to Azure —
+  TypeScript API on an Azure Functions app, React/Vite web on an Azure Static Web
+  App, deployed by GitHub Actions, with client-side Microsoft (MSAL) and Google
+  sign-in. Use whenever creating, provisioning, deploying, REUSING, or debugging
+  an EnterpriseDS Azure app. It records what shared infra ALREADY EXISTS (org
+  secrets, storage, the deploy service principal and its Microsoft Graph grant,
+  the Google OAuth client) so agents reuse it instead of rebuilding, and so they
+  do not raise blockers that the workflow kit already solves.
 ---
 
 # EnterpriseDS — Azure app deployment pattern
 
-The house style for shipping an app: a TypeScript API on an **Azure Functions
-app**, a React/Vite frontend on an **Azure Static Web App**, both driven by
-**GitHub Actions** using shared org secrets. Reference implementation:
-`deventerpriseds-org/mail-and-appointments` (and `boost-application-packet-platform`).
+TypeScript API on an **Azure Functions app** + React/Vite web on an **Azure
+Static Web App**, both deployed by **GitHub Actions**. Canonical, working
+reference: **`deventerpriseds-org/mail-and-appointments`** — copy from it.
 
-## Fixed infrastructure facts (shared across apps)
+## RULE 0 — Reuse, do not rebuild
 
-- **GitHub org:** `deventerpriseds-org` — this is where the `AZURE_*` / `GOOGLE_*`
-  Actions org secrets live. Put new Azure apps here (or grant the repo access to
-  those org secrets), otherwise `azure/login` gets empty creds.
-- **Resource Group:** `EnterpriseDS_ResourceGRP`
-- **Subscription:** `09594120-1b35-4e21-84c6-451ac27175a3`
-- **Tenant:** `ee633423-c321-413c-a191-ace8b07e4196`
-- **Shared Storage Account:** `n8nstxpdthydai6fkm` (add per-app tables; reuse it)
-- **Regions:** Functions `eastus`; Static Web Apps `eastus2` (SWA is region-limited)
-- **Node runtime:** 22
-- **Naming:** prefix resources with `enterpriseds-` (Function App names are
-  globally unique across Azure; the prefix avoids collisions).
+For a new app you **copy the deploy kit and reuse the shared infrastructure**.
+You do NOT re-author workflows from scratch, and you do NOT re-provision shared
+resources. Concretely:
+
+- **Copy** the six workflows in `.github/workflows/` from the reference repo and
+  change only the `env:` resource names.
+- **Copy** the web auth/config pattern: `web/src/auth/msalConfig.ts`,
+  `web/src/auth/googleConfig.ts`, `web/src/api.ts`.
+- **Reuse** everything under "Already provisioned" below — it exists tenant-wide.
+
+## Already provisioned — shared, NEVER recreate
+
+- **GitHub org `deventerpriseds-org`** holds the Actions org secrets: `AZURE_CLIENT_ID`,
+  `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`,
+  `AZURE_STORAGE_CONNECTION_STRING`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
+  Put new apps in this org (or grant the repo access to these secrets).
+- **Resource Group** `EnterpriseDS_ResourceGRP` · **Subscription**
+  `09594120-1b35-4e21-84c6-451ac27175a3` · **Tenant** `ee633423-c321-413c-a191-ace8b07e4196`.
+- **Storage account** `n8nstxpdthydai6fkm` — reuse it; just add per-app tables.
+- **Deploy service principal** `enterpriseds-github-actions` (= `AZURE_CLIENT_ID`)
+  **already holds Microsoft Graph `Application.ReadWrite.All` with admin consent.**
+  → `azure-entra-app.yml` creates/manages Entra apps out of the box. Do NOT ask for
+  another grant, and do NOT send the user to the portal to register redirect URIs.
+- **Google OAuth client** (`GOOGLE_CLIENT_ID`) is shared across apps.
+- **Regions:** Functions `eastus`; Static Web Apps `eastus2`. **Node** 22.
+  **Naming:** `enterpriseds-<app>-api` / `enterpriseds-<app>-web` (Function App names
+  are globally unique).
+
+## Per new app — the checklist
+
+1. Repo in `deventerpriseds-org` (or grant it access to the org secrets).
+2. Copy the six workflows; set `FUNCTION_APP`, `STATIC_WEB_APP`, and `MS_APP_NAME`
+   to **this app's** names (e.g. `enterpriseds-acme-api`, `enterpriseds-acme-web`).
+   Copy the web auth/config files.
+3. Run **Azure Infrastructure Provision** → **Azure Infrastructure Setup**.
+4. Push under `api/**` / `web/**` to deploy.
+5. Microsoft sign-in: run **Provision Entra App** — it creates **this app's own**
+   Entra registration and **sets its SPA redirect URI automatically**. Then run/redeploy
+   **Deploy Web** (it resolves the client ID by name). No portal step.
+6. Google sign-in: add the new SWA origin to the shared Google OAuth client
+   (the only manual step — see below).
 
 ## The workflow kit (`.github/workflows/`)
-
-Mirror these from the reference repo, changing the `env:` names per app:
 
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `azure-provision.yml` | manual | Create Function App + Static Web App (idempotent) |
-| `azure-setup.yml` | manual | Create storage tables + set Function App app settings |
+| `azure-setup.yml` | manual | Storage tables, Function App settings, **CORS allow the SWA origin** |
 | `api-deploy.yml` | push `master` (`api/**`) | Build + zip-deploy the API |
-| `web-deploy.yml` | push `master` (`web/**`) | Build + deploy the web app; auto-resolves the MS client ID |
-| `azure-entra-app.yml` | manual | Create/manage the Microsoft sign-in Entra app + SPA redirect URI |
-| `azure-confirm-id.yml` | manual | Diagnostic: report the SP / app-registration metadata |
+| `web-deploy.yml` | push `master` (`web/**`) | Build + deploy web; auto-resolves the MS client ID |
+| `azure-entra-app.yml` | manual | Create **this app's** Entra sign-in app + set its SPA redirect URI |
+| `azure-confirm-id.yml` | manual | Diagnostic: SP / app-registration metadata |
 
-All log in with:
-`creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'`
+## Microsoft sign-in — automated, one Entra app per app
 
-## Secrets model (all reused org secrets — nothing new to create)
+Client-side only (MSAL browser + PKCE); the API does no server-side MS exchange, so
+the Entra app is a **public SPA client, no secret**.
 
-- Deploy SP: `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`,
-  `AZURE_SUBSCRIPTION_ID` (SP is `enterpriseds-github-actions`).
-- `AZURE_STORAGE_CONNECTION_STRING`; `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
-- Web build injects `VITE_MS_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID` at build time.
-  `VITE_GOOGLE_CLIENT_ID ← GOOGLE_CLIENT_ID`. `VITE_MS_CLIENT_ID` is resolved from
-  the dedicated Entra app by name (see below); `MAIL_MS_CLIENT_ID` is only a fallback.
+- **Each app gets its OWN Entra app.** Set `azure-entra-app.yml`'s `APP_NAME` to
+  `enterpriseds-<app>-web`. **Never** point a new app at another app's registration
+  (e.g. `enterpriseds-mail-web`) — the redirect-URI PATCH would overwrite it.
+- `azure-entra-app.yml` creates the app via a Graph `POST` (not `az ad app create`,
+  which fails under SP auth) and sets `spa.redirectUris` to the SWA URL. Because the
+  deploy SP already has `Application.ReadWrite.All`, this needs **no grant and no
+  manual portal step**. `web-deploy.yml` bakes the resolved client ID into the build.
+- `msalConfig.ts` pins the authority to the tenant (single-tenant). For external/
+  personal accounts, make the app multi-tenant and set `VITE_MS_AUTHORITY`.
 
-## Microsoft sign-in = its own Entra app (not the deploy SP)
+## The ONLY genuine manual step — Google authorized origins
 
-The Connect (Microsoft) flow is **client-side only** (MSAL browser + PKCE); the API
-does **no** server-side Microsoft token exchange, so the web app needs **no client
-secret**. Keep it separate from the deploy service principal.
+The Azure workflows can't configure the Google OAuth client. For each new app, in the
+Google Cloud console add the app's Static Web App origin
+(`https://<swa-host>`) to the shared client's **Authorized JavaScript origins** and
+**Authorized redirect URIs**. Nothing on the Microsoft side needs this — only Google.
 
-- `azure-entra-app.yml` creates a single-tenant public SPA app and sets its SPA
-  redirect URI to the Static Web App URL, then prints the client ID. `web-deploy.yml`
-  looks that client ID up by app name and bakes it into the build — no manual secret.
-- Prereq: the deploy SP must hold Microsoft Graph **`Application.ReadWrite.All`**
-  (admin-consented). One-time grant by a Global/Privileged Role Admin:
-  ```bash
-  SP_APP_ID=$(az ad sp list --display-name enterpriseds-github-actions --query "[0].appId" -o tsv)
-  az ad app permission add --id "$SP_APP_ID" --api 00000003-0000-0000-c000-000000000000 \
-    --api-permissions 1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9=Role   # Application.ReadWrite.All
-  az ad app permission admin-consent --id "$SP_APP_ID"
-  ```
-  Tighter alternative: `Application.ReadWrite.OwnedBy` (role `18a4783c-866b-4cc7-a460-3d0e455a5c31`).
+## Secrets → settings
 
-## Standing up a NEW app
+- Web build: `VITE_MS_CLIENT_ID` ← resolved from this app's Entra app at deploy time
+  (fallback secret `MAIL_MS_CLIENT_ID`); `VITE_GOOGLE_CLIENT_ID` ← `GOOGLE_CLIENT_ID`;
+  `VITE_API_BASE_URL` ← the Function App URL.
+- API runtime: `AZURE_STORAGE_CONNECTION_STRING`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
 
-1. Create the repo in `deventerpriseds-org` (or grant it access to the org secrets).
-2. Copy the six workflows; set the `FUNCTION_APP` / `STATIC_WEB_APP` env names.
-3. Run **Azure Infrastructure Provision** → **Azure Infrastructure Setup**.
-4. Push under `api/**` / `web/**` to auto-deploy.
-5. For Microsoft sign-in: ensure the SP grant above exists, run **Provision Entra
-   App**, then **Deploy Web**. Pin `msalConfig.ts` authority to the tenant for a
-   single-tenant app; use `/organizations` (+ multi-tenant app) only for external users.
+## Do NOT (these cause the failures we've seen)
 
-## Gotchas (hard-won — do not rediscover)
+- **Do NOT rebuild** the workflows or auth wiring from scratch — copy them and rename.
+- **Do NOT re-provision shared infra** (org secrets, storage account, deploy SP,
+  Google client) — it already exists.
+- **Do NOT tell the user to add the Microsoft SPA redirect URI in the portal.**
+  `azure-entra-app.yml` sets it; the SP's Graph grant is already in place. Portal is
+  only a fallback if that workflow fails with "Insufficient privileges" (grant revoked).
+- **Do NOT reuse another app's Entra app** for a new app — one Entra app per app.
+- The Google authorized-origins step is the **only** manual action; don't imply the
+  Microsoft side is also manual.
 
-- **Org secrets are scoped.** GitHub org secrets are not shared across orgs, and
-  "Selected repositories" scoping means a repo must be on the access list. Symptom of
-  a missing/unshared secret: `azure/login` → `Not all parameters are provided in 'creds'`.
-- **`az ad app create` fails under service-principal auth** (`Resource '...' does not
-  exist or one of its queried reference-property objects are not present`) — it tries
-  to auto-add the signed-in *user* as owner and there is none. Create app registrations
-  with a direct Graph `POST /applications` instead (with the `spa` redirect URI inline).
-- **`graph.microsoft.com` is NOT reachable from Claude Code web/CCR containers** (the
-  egress proxy blocks it); `management.azure.com` and `login.microsoftonline.com` are.
-  So Microsoft Graph / Entra admin actions (the SP grant, admin consent) must run from a
-  normal machine (`az login` as admin) or the portal — never a web session. ARM work
-  (Function App, Static Web App, storage) is fine anywhere and already runs in Actions.
-- **Static Web Apps exist only in a few regions** (use `eastus2`); **Function App
-  names are globally unique** across Azure.
-- **The web `build` runs `tsc` before `vite build`.** `import.meta.env` needs the Vite
-  client types — add `web/src/vite-env.d.ts` with `/// <reference types="vite/client" />`
-  or `tsc` fails. Does not show up under `npm run dev` (dev skips `tsc`).
-- **Web and API are separate origins in production.** The Static Web App host is not
-  the Function App host, and the default SWA tier has no linked backend — so relative
-  `/api/*` calls 404 (they hit the SWA, not the API). The frontend must call the API by
-  **absolute URL** via `VITE_API_BASE_URL` (`https://<function-app>.azurewebsites.net`),
-  and the Function App must allow the SWA origin via CORS
-  (`az functionapp cors add --allowed-origins https://<swa-host>`). Local `npm run dev`
-  hides this because the Vite proxy rewrites `/api` → `:7071`.
-- **Deploy from GitHub Actions, not the CCR container** — the container has no Azure
-  creds; the sanctioned path is the Actions workflows (triggerable via the GitHub API).
+## Gotchas (hard-won)
+
+- **Org secrets are scoped.** Not shared across orgs; "Selected repositories" scoping
+  means the repo must be on the access list, or `azure/login` gets empty creds
+  (`Not all parameters are provided in 'creds'`).
+- **`az ad app create` fails under service-principal auth** — create app registrations
+  with a Graph `POST /applications` (spa redirect URI inline), as `azure-entra-app.yml` does.
+- **`graph.microsoft.com` is blocked from Claude Code web/CCR containers.** This only
+  affects the one-time SP grant (already done) — it does NOT block per-app Entra
+  provisioning, which runs in **GitHub Actions** where Graph is reachable.
+  `management.azure.com` + `login.microsoftonline.com` are reachable.
+- **Static Web Apps: few regions** (`eastus2`); **Function App names are globally unique**.
+- **The web `build` runs `tsc` before `vite build`** — needs `web/src/vite-env.d.ts`
+  (`/// <reference types="vite/client" />`) or `import.meta.env` fails `tsc`. Hidden under `npm run dev`.
+- **Web and API are separate origins in prod** — the frontend calls the API by absolute
+  URL (`VITE_API_BASE_URL`); the Function App allows the SWA origin via CORS
+  (`azure-setup.yml`). Relative `/api/*` only works in local dev via the Vite proxy.
+- **Deploy from GitHub Actions, not the CCR container** — the container has no Azure creds.

@@ -58,8 +58,9 @@ resources. Concretely:
 5. Microsoft sign-in: run **Provision Entra App** — it creates **this app's own**
    Entra registration and **sets its SPA redirect URI automatically**. Then run/redeploy
    **Deploy Web** (it resolves the client ID by name). No portal step.
-6. Google sign-in: add the new SWA origin to the shared Google OAuth client
-   (the only manual step — see below).
+6. Google sign-in: **nothing per-app.** Every app funnels through the shared canonical
+   redirect (`VITE_GOOGLE_REDIRECT_URI`, already set in `web-deploy.yml`), which is
+   registered in the Google client once (see below). No Google console step per app.
 
 ## The workflow kit (`.github/workflows/`)
 
@@ -87,18 +88,31 @@ the Entra app is a **public SPA client, no secret**.
 - `msalConfig.ts` pins the authority to the tenant (single-tenant). For external/
   personal accounts, make the app multi-tenant and set `VITE_MS_AUTHORITY`.
 
-## The ONLY genuine manual step — Google authorized origins
+## Google sign-in — register once, then zero per app
 
-The Azure workflows can't configure the Google OAuth client. For each new app, in the
-Google Cloud console add the app's Static Web App origin
-(`https://<swa-host>`) to the shared client's **Authorized JavaScript origins** and
-**Authorized redirect URIs**. Nothing on the Microsoft side needs this — only Google.
+Google is an auth-**code** flow, and Google requires the exact `redirect_uri` to be an
+**Authorized redirect URI** on the OAuth client (no wildcards, no public API to script
+it). To avoid touching the Google console for every app, all apps share **one canonical
+redirect** and funnel through it:
+
+- `VITE_GOOGLE_REDIRECT_URI` (set in `web-deploy.yml`, same value for every app) is the
+  canonical origin. `ConnectPage` sends it as the Google `redirect_uri` and encodes the
+  originating app's origin in `state`. Google returns the code to the canonical origin,
+  whose `ConnectPage` **forwards the code back** to the originating app, which then
+  exchanges it via its own API (`redirect_uri` = the canonical value, so it validates).
+- **One-time setup:** register the canonical URI (currently
+  `https://victorious-field-096ac470f.7.azurestaticapps.net`) as an Authorized redirect
+  URI on the shared Google client. After that, **new apps need no Google console change** —
+  they just carry the same `VITE_GOOGLE_REDIRECT_URI`.
+- To move the broker off the mail app later, stand up a dedicated host, change
+  `VITE_GOOGLE_REDIRECT_URI`, and re-register once.
 
 ## Secrets → settings
 
 - Web build: `VITE_MS_CLIENT_ID` ← resolved from this app's Entra app at deploy time
   (fallback secret `MAIL_MS_CLIENT_ID`); `VITE_GOOGLE_CLIENT_ID` ← `GOOGLE_CLIENT_ID`;
-  `VITE_API_BASE_URL` ← the Function App URL.
+  `VITE_API_BASE_URL` ← the Function App URL; `VITE_GOOGLE_REDIRECT_URI` ← the shared
+  canonical Google redirect (same value for every app).
 - API runtime: `AZURE_STORAGE_CONNECTION_STRING`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
 
 ## Do NOT (these cause the failures we've seen)
@@ -110,8 +124,9 @@ Google Cloud console add the app's Static Web App origin
   `azure-entra-app.yml` sets it; the SP's Graph grant is already in place. Portal is
   only a fallback if that workflow fails with "Insufficient privileges" (grant revoked).
 - **Do NOT reuse another app's Entra app** for a new app — one Entra app per app.
-- The Google authorized-origins step is the **only** manual action; don't imply the
-  Microsoft side is also manual.
+- **Do NOT add the app's own origin to the Google client** per app. Google uses the
+  **shared canonical redirect** (`VITE_GOOGLE_REDIRECT_URI`), registered once. New apps
+  need no Google console change.
 
 ## Gotchas (hard-won)
 

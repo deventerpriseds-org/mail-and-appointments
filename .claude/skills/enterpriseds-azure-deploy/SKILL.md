@@ -17,6 +17,22 @@ TypeScript API on an **Azure Functions app** + React/Vite web on an **Azure
 Static Web App**, both deployed by **GitHub Actions**. Canonical, working
 reference: **`deventerpriseds-org/mail-and-appointments`** — copy from it.
 
+## The payoff — what you do NOT do per app
+
+This infrastructure already exists, so a **new app needs none** of these. If you
+find yourself doing one, stop — it's already handled:
+
+- ❌ No creating/rotating Azure/Google secrets — the org secrets are reused.
+- ❌ No adding the Microsoft SPA **redirect URI in the Entra portal** —
+  `azure-entra-app.yml` sets it (the SP already has the Graph grant).
+- ❌ No adding the app's origin to the **Google console** — every app funnels
+  through the shared `enterpriseds-auth-broker` (one URI registered once, ever).
+- ❌ No new storage account, no re-provisioning shared resources, no re-granting
+  the SP.
+
+A new app is: copy the kit → rename resources → run Provision/Setup/Provision-Entra-App
+→ push. That's the whole job.
+
 ## RULE 0 — Reuse, do not rebuild
 
 For a new app you **copy the deploy kit and reuse the shared infrastructure**.
@@ -147,4 +163,10 @@ redirect** and funnel through it:
 - **Web and API are separate origins in prod** — the frontend calls the API by absolute
   URL (`VITE_API_BASE_URL`); the Function App allows the SWA origin via CORS
   (`azure-setup.yml`). Relative `/api/*` only works in local dev via the Vite proxy.
+- **Google sign-in needs identity scopes.** Request `openid email profile` alongside
+  the data scopes (`gmail.readonly`, `calendar.readonly`) in `googleConfig.ts`. Without
+  them the token exchange *succeeds* but the API's `userinfo.get()` fails with "Request
+  is missing required authentication credential" — a confusing symptom for a scope gap.
+- **A Google auth code is single-use** — redeeming it twice returns `invalid_grant`.
+  `ConnectPage` guards against a re-fired effect double-redeeming.
 - **Deploy from GitHub Actions, not the CCR container** — the container has no Azure creds.

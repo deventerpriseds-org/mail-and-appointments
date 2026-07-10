@@ -10,6 +10,12 @@ export const googleRedirectUri =
 export const googleConfig = {
   clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID ?? "",
   scopes: [
+    // Identity scopes — required so the API's userinfo.get() can read the
+    // account's email/name. Without these the token exchange succeeds but
+    // userinfo fails with "missing required authentication credential".
+    "openid",
+    "email",
+    "profile",
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/calendar.readonly",
   ].join(" "),

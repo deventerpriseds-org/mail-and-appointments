@@ -57,6 +57,9 @@ jobs:
           # The web (Static Web App) and API (Function App) are separate origins,
           # so the frontend must call the API by absolute URL.
           VITE_API_BASE_URL: https://${{ env.FUNCTION_APP }}.azurewebsites.net
+          # Shared Google redirect URI — registered ONCE in the Google OAuth client.
+          # Every app uses this same value; new apps need no per-app Google console change.
+          VITE_GOOGLE_REDIRECT_URI: https://victorious-field-096ac470f.7.azurestaticapps.net
         run: |
           cd web
           npm ci

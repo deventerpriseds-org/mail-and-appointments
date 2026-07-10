@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useMsal } from "@azure/msal-react";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { msScopes } from "../auth/msalConfig";
-import { buildGoogleAuthUrl } from "../auth/googleConfig";
+import { buildGoogleAuthUrl, googleRedirectUri } from "../auth/googleConfig";
 import { useAccounts, ConnectedAccount } from "../auth/AccountContext";
 import { apiUrl } from "../api";
 
@@ -12,16 +12,34 @@ export default function ConnectPage() {
   const { instance: msalInstance } = useMsal();
   const { accounts, addAccount, removeAccount } = useAccounts();
 
-  // Handle Google OAuth redirect callback
+  // Handle Google OAuth redirect callback (shared-broker flow).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
-    const state = params.get("state");
+    const stateRaw = params.get("state");
+    if (!code || !stateRaw) return;
 
-    if (code && state === "google") {
-      exchangeGoogleCode(code);
-      window.history.replaceState({}, "", window.location.pathname);
+    let state: { p?: string; o?: string };
+    try {
+      state = JSON.parse(atob(stateRaw.replace(/-/g, "+").replace(/_/g, "/")));
+    } catch {
+      return;
     }
+    if (state.p !== "google") return;
+
+    window.history.replaceState({}, "", window.location.pathname);
+
+    // If this load is the canonical redirect receiving a code on behalf of a
+    // different app, hand the code back to that app; otherwise exchange it here.
+    if (state.o && state.o !== window.location.origin) {
+      const url = new URL(state.o);
+      url.searchParams.set("code", code);
+      url.searchParams.set("state", stateRaw);
+      window.location.replace(url.toString());
+      return;
+    }
+
+    exchangeGoogleCode(code);
   }, []);
 
   async function exchangeGoogleCode(code: string) {
@@ -29,7 +47,8 @@ export default function ConnectPage() {
       const res = await fetch(apiUrl("/auth/google/token"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, redirectUri: window.location.origin }),
+        // Must match the redirect_uri used in the auth request (the shared canonical URI).
+        body: JSON.stringify({ code, redirectUri: googleRedirectUri }),
       });
       if (!res.ok) throw new Error("Token exchange failed");
       const data = await res.json() as {
@@ -83,8 +102,13 @@ export default function ConnectPage() {
   }
 
   function handleGoogleConnect() {
-    const redirectUri = window.location.origin;
-    window.location.href = buildGoogleAuthUrl(redirectUri) + "&state=google";
+    // Encode the originating app's origin in state so the canonical broker can
+    // hand the code back here. base64url so it survives the query string.
+    const state = btoa(JSON.stringify({ p: "google", o: window.location.origin }))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+    window.location.href = buildGoogleAuthUrl(googleRedirectUri, state);
   }
 
   return (

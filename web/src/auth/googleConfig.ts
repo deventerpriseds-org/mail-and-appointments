@@ -2,10 +2,10 @@
 // app funnels its Google sign-in through this single canonical origin, which then
 // hands the auth code back to the originating app. New apps set
 // VITE_GOOGLE_REDIRECT_URI to this same value and need NO per-app Google console
-// change. Default points at the canonical broker (the mail app's Static Web App).
+// change. Default points at the dedicated central broker (enterpriseds-auth-broker).
 export const googleRedirectUri =
   import.meta.env.VITE_GOOGLE_REDIRECT_URI ??
-  "https://victorious-field-096ac470f.7.azurestaticapps.net";
+  "https://proud-hill-09accd00f.7.azurestaticapps.net";
 
 export const googleConfig = {
   clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID ?? "",

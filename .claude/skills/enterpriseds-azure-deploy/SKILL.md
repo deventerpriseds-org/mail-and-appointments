@@ -95,16 +95,18 @@ Google is an auth-**code** flow, and Google requires the exact `redirect_uri` to
 it). To avoid touching the Google console for every app, all apps share **one canonical
 redirect** and funnel through it:
 
-- `VITE_GOOGLE_REDIRECT_URI` (set in `web-deploy.yml`, same value for every app) is the
-  canonical origin. `ConnectPage` sends it as the Google `redirect_uri` and encodes the
-  originating app's origin in `state`. Google returns the code to the canonical origin,
-  whose `ConnectPage` **forwards the code back** to the originating app, which then
-  exchanges it via its own API (`redirect_uri` = the canonical value, so it validates).
-- **One-time setup:** register the canonical URI (currently
-  `https://victorious-field-096ac470f.7.azurestaticapps.net`) as an Authorized redirect
-  URI on the shared Google client. After that, **new apps need no Google console change** —
-  they just carry the same `VITE_GOOGLE_REDIRECT_URI`.
-- To move the broker off the mail app later, stand up a dedicated host, change
+- The canonical redirect is a **dedicated broker**: repo `deventerpriseds-org/enterpriseds-auth-broker`,
+  its own Static Web App `enterpriseds-auth-broker` (**do not delete** — it backs Google
+  sign-in for every app). It hosts one static page that forwards the auth code to the
+  originating app. `VITE_GOOGLE_REDIRECT_URI` (set in `web-deploy.yml`, same for every app)
+  points at it; `ConnectPage` sends it as the Google `redirect_uri` and encodes its own
+  origin in `state`. Google → broker → forwards code back to the app → app exchanges via
+  its own API (`redirect_uri` = the broker, so it validates).
+- **One-time setup:** register the broker URI (currently
+  `https://proud-hill-09accd00f.7.azurestaticapps.net`) as an Authorized redirect URI on
+  the shared Google client. After that, **new apps need no Google console change** — they
+  just carry the same `VITE_GOOGLE_REDIRECT_URI`.
+- To make it permanent/pretty, put a custom domain on the broker, change
   `VITE_GOOGLE_REDIRECT_URI`, and re-register once.
 
 ## Secrets → settings

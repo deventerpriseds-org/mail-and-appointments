@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMsal } from "@azure/msal-react";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
@@ -7,10 +7,15 @@ import { buildGoogleAuthUrl, googleRedirectUri } from "../auth/googleConfig";
 import { useAccounts, ConnectedAccount } from "../auth/AccountContext";
 import { apiUrl } from "../api";
 
+// A Google auth code is single-use: redeeming it twice fails with invalid_grant.
+// Guard at module scope so a re-fired effect can't double-redeem the same code.
+let handledGoogleCode: string | null = null;
+
 export default function ConnectPage() {
   const navigate = useNavigate();
   const { instance: msalInstance } = useMsal();
   const { accounts, addAccount, removeAccount } = useAccounts();
+  const [googleError, setGoogleError] = useState<string | null>(null);
 
   // Handle Google OAuth redirect callback (shared-broker flow).
   useEffect(() => {
@@ -26,6 +31,8 @@ export default function ConnectPage() {
       return;
     }
     if (state.p !== "google") return;
+    if (handledGoogleCode === code) return; // don't redeem the same code twice
+    handledGoogleCode = code;
 
     // The central broker (enterpriseds-auth-broker) already forwarded the code
     // back to this app; just exchange it via our own API.
@@ -41,7 +48,10 @@ export default function ConnectPage() {
         // Must match the redirect_uri used in the auth request (the shared canonical URI).
         body: JSON.stringify({ code, redirectUri: googleRedirectUri }),
       });
-      if (!res.ok) throw new Error("Token exchange failed");
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({} as { error?: string }));
+        throw new Error(detail.error || `Token exchange failed (${res.status})`);
+      }
       const data = await res.json() as {
         accessToken: string;
         accountId: string;
@@ -55,8 +65,12 @@ export default function ConnectPage() {
         email: data.email,
         accessToken: data.accessToken,
       });
+      setGoogleError(null);
     } catch (err) {
-      console.error("Google token exchange error:", err);
+      const msg = err instanceof Error ? err.message : "Google sign-in failed";
+      console.error("Google token exchange error:", msg);
+      setGoogleError(msg);
+      handledGoogleCode = null; // allow a retry
     }
   }
 
@@ -116,6 +130,8 @@ export default function ConnectPage() {
         </button>
       </div>
 
+      {googleError && <p style={styles.errorMsg}>Google sign-in failed: {googleError}</p>}
+
       {accounts.length > 0 && (
         <div style={styles.accountList}>
           <h2 style={{ fontSize: 16, marginBottom: 8 }}>Connected Accounts</h2>
@@ -146,6 +162,7 @@ const styles: Record<string, React.CSSProperties> = {
   container: { maxWidth: 480, margin: "80px auto", fontFamily: "sans-serif", padding: "0 16px" },
   title: { margin: "0 0 8px" },
   subtitle: { color: "#666", marginBottom: 32 },
+  errorMsg: { color: "#c00", background: "#fff0f0", padding: "8px 12px", borderRadius: 4, marginTop: 16, fontSize: 14 },
   buttonGroup: { display: "flex", flexDirection: "column", gap: 12 },
   btn: {
     padding: "12px 24px",

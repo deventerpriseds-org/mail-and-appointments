@@ -127,10 +127,11 @@ Hard-won during initial setup — read before repeating this pattern:
   URL (`VITE_API_BASE_URL` → `https://enterpriseds-mail-api.azurewebsites.net`), set in
   `web-deploy.yml`; relative `/api/*` only works in dev via the Vite proxy. The Function
   App allows the Static Web App origin via CORS (set in `azure-setup.yml`).
-- **Google sign-in uses one shared canonical redirect** (`VITE_GOOGLE_REDIRECT_URI`, set
-  in `web-deploy.yml`) registered in the Google client once; apps funnel through it and
-  the code is handed back to the originating app. New apps need no per-app Google console
-  change — but this canonical URI must be registered once as an Authorized redirect URI.
+- **Google sign-in funnels through the dedicated broker** `enterpriseds-auth-broker`
+  (its own repo + Static Web App; **do not delete**). `VITE_GOOGLE_REDIRECT_URI` (set in
+  `web-deploy.yml`) points at the broker, registered in the Google client once; the broker
+  forwards the auth code back to the app, which exchanges it. New apps need no per-app
+  Google console change.
 - **Deploy Web auto-resolves the MS client ID** from the `enterpriseds-mail-web` Entra
   app by name at build time (needs the SP's Graph permission); `MAIL_MS_CLIENT_ID` is
   only a fallback. Run *Provision Entra App* once, then *Deploy Web* picks it up.

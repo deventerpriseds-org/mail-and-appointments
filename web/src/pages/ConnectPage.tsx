@@ -19,7 +19,7 @@ export default function ConnectPage() {
     const stateRaw = params.get("state");
     if (!code || !stateRaw) return;
 
-    let state: { p?: string; o?: string };
+    let state: { p?: string };
     try {
       state = JSON.parse(atob(stateRaw.replace(/-/g, "+").replace(/_/g, "/")));
     } catch {
@@ -27,18 +27,9 @@ export default function ConnectPage() {
     }
     if (state.p !== "google") return;
 
+    // The central broker (enterpriseds-auth-broker) already forwarded the code
+    // back to this app; just exchange it via our own API.
     window.history.replaceState({}, "", window.location.pathname);
-
-    // If this load is the canonical redirect receiving a code on behalf of a
-    // different app, hand the code back to that app; otherwise exchange it here.
-    if (state.o && state.o !== window.location.origin) {
-      const url = new URL(state.o);
-      url.searchParams.set("code", code);
-      url.searchParams.set("state", stateRaw);
-      window.location.replace(url.toString());
-      return;
-    }
-
     exchangeGoogleCode(code);
   }, []);
 
